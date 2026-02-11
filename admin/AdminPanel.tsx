@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ClassLevel } from '../types';
 import { supabase, getSetting, saveSetting } from '../lib/supabase';
 
@@ -10,6 +10,7 @@ interface FeatureItem {
   audio?: string;
   video?: string;
   image?: string;
+  children?: FeatureItem[];
 }
 
 interface ClassConfig {
@@ -50,6 +51,10 @@ const AdminPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [activeTab, setActiveTab] = useState<'users' | 'home' | 'customization'>('home');
   const [selectedClass, setSelectedClass] = useState<ClassLevel>('Class 1');
   const [selectedFeatureId, setSelectedFeatureId] = useState<string | null>(null);
+  
+  // Navigation stack for recursive editing
+  const [adminPath, setAdminPath] = useState<FeatureItem[]>([]);
+  
   const [users, setUsers] = useState<string[]>([]);
   const [classConfigs, setClassConfigs] = useState<Record<string, ClassConfig>>({});
   const [banners, setBanners] = useState<string[]>([]);
@@ -99,19 +104,84 @@ const AdminPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     finally { setIsSaving(false); }
   };
 
-  const addItem = () => {
+  const getTargetList = (): FeatureItem[] => {
+    if (!selectedFeatureId) return [];
+    if (adminPath.length === 0) {
+      return classConfigs[selectedClass]?.features?.[selectedFeatureId] || [];
+    }
+    const lastNode = adminPath[adminPath.length - 1];
+    return lastNode.children || [];
+  };
+
+  const updateTargetList = (newList: FeatureItem[]) => {
     if (!selectedFeatureId) return;
-    const current = classConfigs[selectedClass] || { hiddenFeatures: [], features: {} };
-    const items = current.features[selectedFeatureId] || [];
-    const newItem = { id: Date.now().toString(), label: 'New Resource' };
-    setClassConfigs({ ...classConfigs, [selectedClass]: { ...current, features: { ...current.features, [selectedFeatureId]: [...items, newItem] } } });
+    
+    if (adminPath.length === 0) {
+      const current = classConfigs[selectedClass] || { hiddenFeatures: [], features: {} };
+      setClassConfigs({
+        ...classConfigs,
+        [selectedClass]: {
+          ...current,
+          features: {
+            ...current.features,
+            [selectedFeatureId]: newList
+          }
+        }
+      });
+      return;
+    }
+
+    // Recursive update for nested children
+    const updateRecursive = (items: FeatureItem[], path: FeatureItem[]): FeatureItem[] => {
+      const targetId = path[0].id;
+      return items.map(item => {
+        if (item.id === targetId) {
+          if (path.length === 1) {
+            return { ...item, children: newList };
+          } else {
+            return { ...item, children: updateRecursive(item.children || [], path.slice(1)) };
+          }
+        }
+        return item;
+      });
+    };
+
+    const rootList = classConfigs[selectedClass]?.features?.[selectedFeatureId] || [];
+    const updatedRoot = updateRecursive(rootList, adminPath);
+    
+    const currentConfig = classConfigs[selectedClass];
+    setClassConfigs({
+      ...classConfigs,
+      [selectedClass]: {
+        ...currentConfig,
+        features: {
+          ...currentConfig.features,
+          [selectedFeatureId]: updatedRoot
+        }
+      }
+    });
+
+    // Update the admin path state so the UI stays in sync with edited children
+    const newPath = [...adminPath];
+    newPath[newPath.length - 1] = { ...newPath[newPath.length - 1], children: newList };
+    setAdminPath(newPath);
+  };
+
+  const addItem = () => {
+    const list = getTargetList();
+    const newItem = { id: Date.now().toString(), label: 'New Resource', children: [] };
+    updateTargetList([...list, newItem]);
   };
 
   const updateItem = (id: string, field: string, val: string) => {
-    if (!selectedFeatureId) return;
-    const current = classConfigs[selectedClass];
-    const items = current.features[selectedFeatureId].map(i => i.id === id ? { ...i, [field]: val } : i);
-    setClassConfigs({ ...classConfigs, [selectedClass]: { ...current, features: { ...current.features, [selectedFeatureId]: items } } });
+    const list = getTargetList();
+    const newList = list.map(i => i.id === id ? { ...i, [field]: val } : i);
+    updateTargetList(newList);
+  };
+
+  const deleteItem = (id: string) => {
+    const list = getTargetList();
+    updateTargetList(list.filter(i => i.id !== id));
   };
 
   const addBanner = () => {
@@ -154,7 +224,7 @@ const AdminPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           <div className="space-y-6 pb-20">
             <div className="bg-white p-6 rounded-[40px] shadow-xl flex flex-wrap gap-2 mb-6">
               {ALL_CLASSES.map(cls => (
-                <button key={cls} onClick={() => {setSelectedClass(cls); setSelectedFeatureId(null);}} className={`px-4 py-2 rounded-xl text-[10px] font-bold ${selectedClass === cls ? 'bg-[#2D235C] text-white' : 'bg-gray-50 text-gray-400'}`}>{cls}</button>
+                <button key={cls} onClick={() => {setSelectedClass(cls); setSelectedFeatureId(null); setAdminPath([]);}} className={`px-4 py-2 rounded-xl text-[10px] font-bold ${selectedClass === cls ? 'bg-[#2D235C] text-white' : 'bg-gray-50 text-gray-400'}`}>{cls}</button>
               ))}
             </div>
 
@@ -162,33 +232,71 @@ const AdminPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               <div className="bg-white p-8 rounded-[48px] shadow-xl space-y-4">
                 <h3 className="font-bold text-[#2D235C]">Select Category</h3>
                 {APP_FEATURES.map(f => (
-                  <button key={f.id} onClick={() => setSelectedFeatureId(f.id)} className={`w-full p-4 rounded-2xl flex justify-between items-center transition-all ${selectedFeatureId === f.id ? 'bg-[#2D235C] text-white shadow-lg' : 'bg-gray-50 text-[#2D235C]'}`}>
+                  <button key={f.id} onClick={() => {setSelectedFeatureId(f.id); setAdminPath([]);}} className={`w-full p-4 rounded-2xl flex justify-between items-center transition-all ${selectedFeatureId === f.id ? 'bg-[#2D235C] text-white shadow-lg' : 'bg-gray-50 text-[#2D235C]'}`}>
                     <span className="font-bold">{f.label}</span>
                     <span className="text-[10px] opacity-60 uppercase font-black">{f.malayalam}</span>
                   </button>
                 ))}
               </div>
 
-              <div className="bg-white p-8 rounded-[48px] shadow-xl flex flex-col min-h-[500px]">
-                <h3 className="font-bold text-[#2D235C] mb-6">Items Management</h3>
+              <div className="bg-white p-8 rounded-[48px] shadow-xl flex flex-col min-h-[600px]">
+                <div className="flex justify-between items-center mb-6">
+                   <h3 className="font-bold text-[#2D235C]">
+                     {adminPath.length > 0 ? (
+                       <div className="flex items-center gap-2 overflow-x-auto no-scrollbar whitespace-nowrap">
+                         <button onClick={() => setAdminPath([])} className="text-gray-400 hover:text-indigo-600 transition-colors">Root</button>
+                         {adminPath.map((node, i) => (
+                           <React.Fragment key={node.id}>
+                             <span className="text-gray-200">/</span>
+                             <button onClick={() => setAdminPath(adminPath.slice(0, i + 1))} className={i === adminPath.length - 1 ? 'text-indigo-600' : 'text-gray-400'}>{node.label}</button>
+                           </React.Fragment>
+                         ))}
+                       </div>
+                     ) : 'Resources Management'}
+                   </h3>
+                   {adminPath.length > 0 && (
+                     <button onClick={() => setAdminPath(adminPath.slice(0, -1))} className="p-2 bg-gray-50 rounded-xl text-xs font-bold text-gray-400">Back</button>
+                   )}
+                </div>
+
                 {selectedFeatureId ? (
                   <div className="space-y-4">
-                    <button onClick={addItem} className="w-full py-4 bg-indigo-50 text-indigo-600 rounded-2xl font-bold mb-4">+ Add New Button</button>
-                    <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2 no-scrollbar">
-                      {(classConfigs[selectedClass]?.features?.[selectedFeatureId] || []).map(item => (
-                        <div key={item.id} className="p-4 bg-gray-50 rounded-[32px] space-y-3">
-                          <input type="text" value={item.label} onChange={e => updateItem(item.id, 'label', e.target.value)} placeholder="Label..." className="w-full h-11 px-4 rounded-xl border-none font-bold text-sm shadow-sm" />
-                          <div className="grid grid-cols-2 gap-2">
-                            <input type="text" placeholder="PDF URL" value={item.pdf || ''} onChange={e => updateItem(item.id, 'pdf', e.target.value)} className="h-10 px-3 text-[10px] rounded-xl border-none shadow-sm" />
-                            <input type="text" placeholder="Video URL" value={item.video || ''} onChange={e => updateItem(item.id, 'video', e.target.value)} className="h-10 px-3 text-[10px] rounded-xl border-none shadow-sm" />
-                            <input type="text" placeholder="Audio URL" value={item.audio || ''} onChange={e => updateItem(item.id, 'audio', e.target.value)} className="h-10 px-3 text-[10px] rounded-xl border-none shadow-sm" />
-                            <input type="text" placeholder="Image URL" value={item.image || ''} onChange={e => updateItem(item.id, 'image', e.target.value)} className="h-10 px-3 text-[10px] rounded-xl border-none shadow-sm" />
+                    <button onClick={addItem} className="w-full py-4 bg-indigo-50 text-indigo-600 rounded-2xl font-bold mb-4">+ Add Item Here</button>
+                    <div className="space-y-4 max-h-[700px] overflow-y-auto pr-2 no-scrollbar">
+                      {getTargetList().map(item => (
+                        <div key={item.id} className="p-5 bg-gray-50 rounded-[32px] space-y-4 border border-gray-100">
+                          <div className="flex gap-2">
+                            <input type="text" value={item.label} onChange={e => updateItem(item.id, 'label', e.target.value)} placeholder="Label..." className="flex-1 h-11 px-4 rounded-xl border-none font-bold text-sm shadow-sm" />
+                            <button onClick={() => setAdminPath([...adminPath, item])} className="px-4 bg-indigo-500 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest shadow-lg shadow-indigo-100">Manage Subs</button>
                           </div>
-                          <button onClick={() => {
-                            const current = classConfigs[selectedClass];
-                            const items = current.features[selectedFeatureId!].filter(i => i.id !== item.id);
-                            setClassConfigs({ ...classConfigs, [selectedClass]: { ...current, features: { ...current.features, [selectedFeatureId!]: items } } });
-                          }} className="w-full py-1 text-[10px] text-red-400 font-bold uppercase tracking-widest">Delete Item</button>
+                          
+                          {/* Media Controls - Only show if NO children */}
+                          {(!item.children || item.children.length === 0) ? (
+                            <div className="grid grid-cols-2 gap-2 animate-in fade-in duration-300">
+                              <div className="space-y-1">
+                                <label className="text-[8px] font-black text-gray-400 uppercase tracking-widest ml-1">PDF URL</label>
+                                <input type="text" placeholder="URL" value={item.pdf || ''} onChange={e => updateItem(item.id, 'pdf', e.target.value)} className="w-full h-10 px-3 text-[10px] rounded-xl border-none shadow-sm" />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-[8px] font-black text-gray-400 uppercase tracking-widest ml-1">Video URL</label>
+                                <input type="text" placeholder="URL" value={item.video || ''} onChange={e => updateItem(item.id, 'video', e.target.value)} className="w-full h-10 px-3 text-[10px] rounded-xl border-none shadow-sm" />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-[8px] font-black text-gray-400 uppercase tracking-widest ml-1">Audio URL</label>
+                                <input type="text" placeholder="URL" value={item.audio || ''} onChange={e => updateItem(item.id, 'audio', e.target.value)} className="w-full h-10 px-3 text-[10px] rounded-xl border-none shadow-sm" />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-[8px] font-black text-gray-400 uppercase tracking-widest ml-1">Cover Image</label>
+                                <input type="text" placeholder="URL" value={item.image || ''} onChange={e => updateItem(item.id, 'image', e.target.value)} className="w-full h-10 px-3 text-[10px] rounded-xl border-none shadow-sm" />
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="p-3 bg-amber-50 rounded-2xl border border-amber-100">
+                               <p className="text-[9px] text-amber-600 font-bold uppercase text-center tracking-widest">⚠️ Has Sub-items (Media Disabled)</p>
+                            </div>
+                          )}
+
+                          <button onClick={() => deleteItem(item.id)} className="w-full py-1 text-[10px] text-red-400 font-bold uppercase tracking-widest border-t border-gray-100 mt-2">Delete This Item</button>
                         </div>
                       ))}
                     </div>

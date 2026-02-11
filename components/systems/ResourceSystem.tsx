@@ -9,6 +9,7 @@ interface FeatureItem {
   audio?: string;
   video?: string;
   image?: string;
+  children?: FeatureItem[];
 }
 
 interface ResourceSystemProps {
@@ -30,7 +31,8 @@ const ResourceSystem: React.FC<ResourceSystemProps> = ({
   onClose,
   accentColor = "#2D235C"
 }) => {
-  const [items, setItems] = useState<FeatureItem[]>([]);
+  const [rootItems, setRootItems] = useState<FeatureItem[]>([]);
+  const [navigationStack, setNavigationStack] = useState<FeatureItem[]>([]);
   const [selectedItem, setSelectedItem] = useState<FeatureItem | null>(null);
   const [activeMedia, setActiveMedia] = useState<'pdf' | 'audio' | 'video' | 'image'>('pdf');
   const [isPlaying, setIsPlaying] = useState(false);
@@ -39,7 +41,7 @@ const ResourceSystem: React.FC<ResourceSystemProps> = ({
   useEffect(() => {
     if (classConfig && classConfig[selectedClass]) {
       const feats = classConfig[selectedClass]?.features?.[systemId] || [];
-      setItems(feats);
+      setRootItems(feats);
     }
   }, [selectedClass, classConfig, systemId]);
 
@@ -56,20 +58,48 @@ const ResourceSystem: React.FC<ResourceSystemProps> = ({
   };
 
   const handleItemSelect = (item: FeatureItem) => {
-    setSelectedItem(item);
-    // Auto-select first available media
-    if (item.pdf) setActiveMedia('pdf');
-    else if (item.video) setActiveMedia('video');
-    else if (item.image) setActiveMedia('image');
-    else if (item.audio) setActiveMedia('audio');
+    if (item.children && item.children.length > 0) {
+      setNavigationStack([...navigationStack, item]);
+    } else {
+      setSelectedItem(item);
+      // Auto-select first available media
+      if (item.pdf) setActiveMedia('pdf');
+      else if (item.video) setActiveMedia('video');
+      else if (item.image) setActiveMedia('image');
+      else if (item.audio) setActiveMedia('audio');
+    }
   };
+
+  const goBack = () => {
+    if (selectedItem) {
+      setSelectedItem(null);
+      audio.pause();
+      setIsPlaying(false);
+    } else if (navigationStack.length > 0) {
+      const newStack = [...navigationStack];
+      newStack.pop();
+      setNavigationStack(newStack);
+    } else {
+      onClose();
+    }
+  };
+
+  const currentItems = navigationStack.length > 0 
+    ? navigationStack[navigationStack.length - 1].children || [] 
+    : rootItems;
+
+  const currentTitle = selectedItem 
+    ? selectedItem.label 
+    : navigationStack.length > 0 
+      ? navigationStack[navigationStack.length - 1].label 
+      : title;
 
   if (selectedItem) {
     return (
       <div className="h-full flex flex-col bg-white animate-in slide-in-from-right duration-500">
         <div style={{ backgroundColor: accentColor }} className="p-6 text-white flex justify-between items-center rounded-b-[40px] shadow-lg sticky top-0 z-50">
           <div className="flex items-center gap-4">
-            <button onClick={() => {setSelectedItem(null); audio.pause(); setIsPlaying(false);}} className="p-3 bg-white/10 rounded-2xl active:scale-90 transition-transform">
+            <button onClick={goBack} className="p-3 bg-white/10 rounded-2xl active:scale-90 transition-transform">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" /></svg>
             </button>
             <div>
@@ -116,9 +146,16 @@ const ResourceSystem: React.FC<ResourceSystemProps> = ({
   return (
     <div className="h-full flex flex-col bg-[#FDF8F5] overflow-hidden">
       <div style={{ backgroundColor: accentColor }} className="p-8 text-white flex justify-between items-center rounded-b-[56px] shadow-2xl sticky top-0 z-10">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">{malayalamTitle}</h2>
-          <p className="text-white/70 text-xs uppercase tracking-[0.2em] font-black mt-1">{title}</p>
+        <div className="flex items-center gap-4">
+          {navigationStack.length > 0 && (
+            <button onClick={goBack} className="p-3 bg-white/10 rounded-2xl active:scale-90 transition-transform">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" /></svg>
+            </button>
+          )}
+          <div>
+            <h2 className="text-3xl font-bold tracking-tight">{navigationStack.length > 0 ? currentTitle : malayalamTitle}</h2>
+            <p className="text-white/70 text-xs uppercase tracking-[0.2em] font-black mt-1">{navigationStack.length > 0 ? title : title}</p>
+          </div>
         </div>
         <button onClick={onClose} className="p-3 bg-white/10 rounded-2xl hover:bg-white/20 active:scale-95 transition-all">
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
@@ -127,21 +164,31 @@ const ResourceSystem: React.FC<ResourceSystemProps> = ({
 
       <div className="flex-1 overflow-y-auto p-6 pb-32">
         <div className="grid grid-cols-1 gap-4">
-          {items.map((item) => (
+          {currentItems.map((item) => (
             <button
               key={item.id}
               onClick={() => handleItemSelect(item)}
               className="group flex items-center gap-5 p-6 bg-white rounded-[32px] shadow-sm border border-gray-100 text-left transition-all hover:translate-y-[-4px] active:scale-95"
             >
               <div className="w-14 h-14 rounded-2xl bg-gray-50 flex items-center justify-center text-[#2D235C] group-hover:bg-amber-50 group-hover:text-amber-600 transition-colors">
-                 <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
+                {item.children && item.children.length > 0 ? (
+                  <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>
+                ) : (
+                  <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
+                )}
               </div>
               <div className="flex-1">
                 <h3 className="text-lg font-bold text-[#2D235C]">{item.label}</h3>
                 <div className="flex gap-2 mt-1">
-                  {item.pdf && <span className="text-[8px] bg-red-50 text-red-500 font-black px-1.5 py-0.5 rounded uppercase">PDF</span>}
-                  {item.video && <span className="text-[8px] bg-blue-50 text-blue-500 font-black px-1.5 py-0.5 rounded uppercase">Video</span>}
-                  {item.audio && <span className="text-[8px] bg-green-50 text-green-500 font-black px-1.5 py-0.5 rounded uppercase">Audio</span>}
+                  {item.children && item.children.length > 0 ? (
+                    <span className="text-[8px] bg-purple-50 text-purple-500 font-black px-1.5 py-0.5 rounded uppercase">{item.children.length} Folders</span>
+                  ) : (
+                    <>
+                      {item.pdf && <span className="text-[8px] bg-red-50 text-red-500 font-black px-1.5 py-0.5 rounded uppercase">PDF</span>}
+                      {item.video && <span className="text-[8px] bg-blue-50 text-blue-500 font-black px-1.5 py-0.5 rounded uppercase">Video</span>}
+                      {item.audio && <span className="text-[8px] bg-green-50 text-green-500 font-black px-1.5 py-0.5 rounded uppercase">Audio</span>}
+                    </>
+                  )}
                 </div>
               </div>
               <div className="text-gray-200 group-hover:text-amber-400 transition-colors">
@@ -149,7 +196,7 @@ const ResourceSystem: React.FC<ResourceSystemProps> = ({
               </div>
             </button>
           ))}
-          {items.length === 0 && (
+          {currentItems.length === 0 && (
             <div className="py-20 text-center text-gray-300">
                <p className="font-bold">No items found</p>
                <p className="text-xs">Add content in the Admin Panel to see them here.</p>
