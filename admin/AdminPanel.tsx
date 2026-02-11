@@ -175,16 +175,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose }) => {
     reader.readAsDataURL(file);
   };
 
-  // Visibility Filter for Admin Panel
+  // Visibility Filter strictly following your request
   const getVisibleFeatures = () => {
-    const hardHidden = {
+    const hardHiddenRules: Record<string, string[]> = {
       'Class 1': ['videoClasses', 'bookGuide', 'translatedGuide'],
       'Class 2': ['videoClasses', 'translatedGuide'],
       'Class 3': ['videoClasses', 'translatedGuide'],
       'Class 4': ['videoClasses', 'translatedGuide'],
       'Plus Two': ['translatedGuide']
-    }[selectedClass] || [];
+    };
 
+    const hardHidden = hardHiddenRules[selectedClass] || [];
     return APP_FEATURES.filter(f => !hardHidden.includes(f.id));
   };
 

@@ -164,18 +164,19 @@ const App: React.FC = () => {
     const config = classConfig[selectedClass] || { hiddenFeatures: [] };
 
     const isVisible = (id: string) => {
-      // 1. Check Hard-Coded Business Rules
-      const hardHidden = {
+      // Hard-coded rules as requested
+      const hardHiddenRules: Record<string, string[]> = {
         'Class 1': ['videoClasses', 'bookGuide', 'translatedGuide'],
         'Class 2': ['videoClasses', 'translatedGuide'],
         'Class 3': ['videoClasses', 'translatedGuide'],
         'Class 4': ['videoClasses', 'translatedGuide'],
         'Plus Two': ['translatedGuide']
-      }[selectedClass] || [];
+      };
 
+      const hardHidden = hardHiddenRules[selectedClass] || [];
       if (hardHidden.includes(id)) return false;
 
-      // 2. Check Dynamic Admin Overrides
+      // Admin dynamic overrides
       return !config.hiddenFeatures.includes(id);
     };
 
@@ -217,13 +218,13 @@ const App: React.FC = () => {
                 )}
 
                 {isVisible('bookGuide') && (
-                  <div onClick={() => console.log('Book Guide')}>
+                  <div onClick={() => console.log('Book Guide triggered')}>
                     <ResourceCard title="Book Guide" malayalamTitle="പുസ്തക സഹായി" description="Full textbook guides." icon={<ICONS.Book className="w-6 h-6 text-white" />} color="#1976D2" image={appImages.bookGuide} />
                   </div>
                 )}
 
                 {isVisible('translatedGuide') && (
-                  <div onClick={() => console.log('Translated Guide')}>
+                  <div onClick={() => console.log('Translated Guide triggered')}>
                     <ResourceCard title="Translated Guide" malayalamTitle="വിവർത്തനം" description="Study guides in Malayalam." icon={<ICONS.Translate className="w-6 h-6 text-white" />} color="#00796B" image={appImages.translatedGuide} />
                   </div>
                 )}
@@ -247,7 +248,7 @@ const App: React.FC = () => {
                 <h2 className="text-xl font-bold text-[#2D235C]">Academic Hub</h2>
                 <p className="text-xs text-gray-500">സിലബസ് & ടൈംടേബിൾ</p>
               </div>
-              <UtilityGrid />
+              <UtilityGrid selectedClass={selectedClass} />
             </section>
 
             <section className="px-6 pb-12">
@@ -260,7 +261,7 @@ const App: React.FC = () => {
           </div>
         );
       case Tab.Academic:
-        return <div className="px-6 py-8 space-y-6 pb-32"><h2 className="text-2xl font-bold text-[#2D235C]">Academic Center</h2><UtilityGrid /></div>;
+        return <div className="px-6 py-8 space-y-6 pb-32"><h2 className="text-2xl font-bold text-[#2D235C]">Academic Center</h2><UtilityGrid selectedClass={selectedClass} /></div>;
       case Tab.Kids:
         return <div className="px-6 py-8 pb-32"><h2 className="text-2xl font-bold text-[#2D235C] mb-6">Kids Adventure</h2><KidsZone onSelectSlate={() => setActiveOverlay('digitalSlate')} onSelectAbout={() => setActiveOverlay('about')} /></div>;
       case Tab.Profile:
