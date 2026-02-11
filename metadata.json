@@ -1,0 +1,7 @@
+{
+  "name": "Madrasa Hub (EK)",
+  "description": "A high-fidelity, modern educational application for Madrasa students with a sophisticated glassmorphic UI, featuring video classes, Quranic studies, and a dedicated Kids Zone.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
