@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Tab, ClassLevel } from './types';
 import { COLORS, ICONS } from './constants';
@@ -13,9 +14,8 @@ import Splash from './components/Splash';
 import ToLearnList from './components/ToLearnList';
 import DigitalSlate from './components/DigitalSlate';
 import About from './components/About';
-import VideoClasses from './components/systems/VideoClasses';
+import ResourceSystem from './components/systems/ResourceSystem';
 import QuranSystem from './components/systems/QuranSystem';
-import DuaSystem from './components/systems/DuaSystem';
 import BannerSlider from './components/BannerSlider';
 import { supabase, getSetting } from './lib/supabase';
 
@@ -32,7 +32,7 @@ const App: React.FC = () => {
   const [classConfig, setClassConfig] = useState<any>({});
 
   // System Overlay States
-  const [activeOverlay, setActiveOverlay] = useState<'toLearn' | 'digitalSlate' | 'about' | 'videoClasses' | 'quran' | 'dua' | null>(null);
+  const [activeOverlay, setActiveOverlay] = useState<string | null>(null);
 
   // Dynamic Content State
   const [appImages, setAppImages] = useState({
@@ -52,35 +52,22 @@ const App: React.FC = () => {
     const handleRouting = () => {
       const path = window.location.pathname;
       const hash = window.location.hash;
-      const search = window.location.search;
-      
-      if (path === '/admin' || hash === '#/admin' || hash === '#admin' || search.includes('admin=true')) {
-        setIsAdmin(true);
-      } else {
-        setIsAdmin(false);
-      }
+      if (path === '/admin' || hash === '#/admin') setIsAdmin(true);
+      else setIsAdmin(false);
     };
 
     handleRouting();
     window.addEventListener('hashchange', handleRouting);
     window.addEventListener('popstate', handleRouting);
 
-    const handleScroll = () => {
-      setScrolled(window.scrollY > 20);
-    };
+    const handleScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener('scroll', handleScroll);
 
     const loadData = async () => {
       const storedName = localStorage.getItem('madrasa_hub_username');
       const storedClass = localStorage.getItem('madrasa_hub_class');
-      
-      if (storedName) {
-        setUserName(storedName);
-        setIsLoggedIn(true);
-      }
-      if (storedClass) {
-        setSelectedClass(storedClass as ClassLevel);
-      }
+      if (storedName) { setUserName(storedName); setIsLoggedIn(true); }
+      if (storedClass) setSelectedClass(storedClass as ClassLevel);
 
       try {
         const [cloudBanners, cloudConfig, cloudImages] = await Promise.all([
@@ -88,43 +75,30 @@ const App: React.FC = () => {
           getSetting('class_config'),
           getSetting('app_images')
         ]);
-
         if (cloudBanners) setBanners(cloudBanners);
         if (cloudConfig) {
           setClassConfig(cloudConfig);
           localStorage.setItem('madrasa_hub_class_config', JSON.stringify(cloudConfig));
         }
         if (cloudImages) setAppImages(prev => ({ ...prev, ...cloudImages }));
-      } catch (e) {
-        console.error("Failed to fetch cloud data", e);
-      }
+      } catch (e) { console.error("Data load error", e); }
     };
 
     loadData();
-
     return () => {
       clearTimeout(splashTimer);
       window.removeEventListener('scroll', handleScroll);
       window.removeEventListener('hashchange', handleRouting);
-      window.removeEventListener('popstate', handleRouting);
     };
   }, []);
 
-  const handleLogin = async (name: string) => {
-    setUserName(name);
-    setIsLoggedIn(true);
+  const handleLogin = (name: string) => {
+    setUserName(name); setIsLoggedIn(true);
     localStorage.setItem('madrasa_hub_username', name);
-    
-    try {
-      await supabase.from('students').upsert({ name: name }, { onConflict: 'name' });
-    } catch (err) {
-      console.error("Failed to record login in Supabase", err);
-    }
   };
 
   const handleLogout = () => {
-    setIsLoggedIn(false);
-    setUserName('');
+    setIsLoggedIn(false); setUserName('');
     localStorage.removeItem('madrasa_hub_username');
     setActiveTab(Tab.Home);
   };
@@ -134,150 +108,77 @@ const App: React.FC = () => {
     localStorage.setItem('madrasa_hub_class', level);
   };
 
-  const handleAdminSecretTrigger = () => {
-    const newCount = adminTapCount + 1;
-    if (newCount >= 10) {
-      setIsAdmin(true);
-      window.history.pushState({}, '', '#/admin');
-      setAdminTapCount(0);
-    } else {
-      setAdminTapCount(newCount);
-      setTimeout(() => setAdminTapCount(0), 2000);
-    }
-  };
-
   if (showSplash) return <Splash />;
-
-  if (isAdmin) {
-    return <AdminPanel onClose={() => {
-      setIsAdmin(false);
-      window.history.pushState({}, '', '/');
-      window.location.hash = '';
-      window.location.reload();
-    }} />;
-  }
-
+  if (isAdmin) return <AdminPanel onClose={() => { setIsAdmin(false); window.location.hash = ''; }} />;
   if (!isLoggedIn) return <Login onLogin={handleLogin} />;
+
+  const isVisible = (id: string) => {
+    const hardHiddenRules: Record<string, string[]> = {
+      'Class 1': ['videoClasses', 'bookGuide', 'translatedGuide'],
+      'Class 2': ['videoClasses', 'translatedGuide'],
+      'Class 3': ['videoClasses', 'translatedGuide'],
+      'Class 4': ['videoClasses', 'translatedGuide'],
+      'Plus Two': ['translatedGuide']
+    };
+    if ((hardHiddenRules[selectedClass] || []).includes(id)) return false;
+    return !(classConfig[selectedClass]?.hiddenFeatures || []).includes(id);
+  };
 
   const renderContent = () => {
     const today = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-    const config = classConfig[selectedClass] || { hiddenFeatures: [] };
-
-    const isVisible = (id: string) => {
-      // Hard-coded rules as requested
-      const hardHiddenRules: Record<string, string[]> = {
-        'Class 1': ['videoClasses', 'bookGuide', 'translatedGuide'],
-        'Class 2': ['videoClasses', 'translatedGuide'],
-        'Class 3': ['videoClasses', 'translatedGuide'],
-        'Class 4': ['videoClasses', 'translatedGuide'],
-        'Plus Two': ['translatedGuide']
-      };
-
-      const hardHidden = hardHiddenRules[selectedClass] || [];
-      if (hardHidden.includes(id)) return false;
-
-      // Admin dynamic overrides
-      return !config.hiddenFeatures.includes(id);
-    };
-
     switch (activeTab) {
       case Tab.Home:
         return (
           <div className="space-y-6 animate-in fade-in duration-500 pb-24">
-            <section className="px-6 pt-4">
-              <div className="mb-4">
-                <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-2">Academic Path</h2>
-                <ClassPicker selected={selectedClass} onSelect={handleClassSelect} />
-              </div>
-            </section>
-
-            {banners.length > 0 && (
-              <section className="px-6">
-                <BannerSlider images={banners} />
-              </section>
-            )}
-
+            <section className="px-6 pt-4"><ClassPicker selected={selectedClass} onSelect={handleClassSelect} /></section>
+            {banners.length > 0 && <section className="px-6"><BannerSlider images={banners} /></section>}
             <section className="px-6">
-              <div className="flex justify-between items-end mb-4">
-                <div>
-                  <h2 className="text-xl font-bold text-[#2D235C]">Learning Resources</h2>
-                  <p className="text-xs text-gray-500">പഠന സാമഗ്രികൾ</p>
-                </div>
-              </div>
+              <h2 className="text-xl font-bold text-[#2D235C] mb-4">Learning Resources</h2>
               <div className="grid grid-cols-2 gap-4">
-                {isVisible('videoClasses') && (
-                  <div onClick={() => setActiveOverlay('videoClasses')}>
-                    <ResourceCard title="Video Classes" malayalamTitle="വീഡിയോ ക്ലാസുകൾ" description="Interactive video lessons." icon={<ICONS.Play className="w-6 h-6 text-white" />} color="#2D235C" image={appImages.videoClasses} />
-                  </div>
-                )}
-                
-                {isVisible('quran') && (
-                  <div onClick={() => setActiveOverlay('quran')}>
-                    <ResourceCard title="Holy Quran" malayalamTitle="വിശുദ്ധ ഖുർആൻ" description="Read and listen." icon={<ICONS.Quran className="w-6 h-6 text-white" />} color="#FFC107" image={appImages.quran} />
-                  </div>
-                )}
-
-                {isVisible('bookGuide') && (
-                  <div onClick={() => console.log('Book Guide triggered')}>
-                    <ResourceCard title="Book Guide" malayalamTitle="പുസ്തക സഹായി" description="Full textbook guides." icon={<ICONS.Book className="w-6 h-6 text-white" />} color="#1976D2" image={appImages.bookGuide} />
-                  </div>
-                )}
-
-                {isVisible('translatedGuide') && (
-                  <div onClick={() => console.log('Translated Guide triggered')}>
-                    <ResourceCard title="Translated Guide" malayalamTitle="വിവർത്തനം" description="Study guides in Malayalam." icon={<ICONS.Translate className="w-6 h-6 text-white" />} color="#00796B" image={appImages.translatedGuide} />
-                  </div>
-                )}
-
-                {isVisible('dua') && (
-                  <div onClick={() => setActiveOverlay('dua')}>
-                    <ResourceCard title="Dua" malayalamTitle="ദുആകൾ" description="Important daily supplications." icon={<ICONS.Dua className="w-6 h-6 text-white" />} color="#D32F2F" image={appImages.dua} />
-                  </div>
-                )}
-                
-                {isVisible('toLearn') && (
-                  <div onClick={() => setActiveOverlay('toLearn')}>
-                    <ResourceCard title="To Learn List" malayalamTitle="പഠന പട്ടിക" description="Plan your study schedule." icon={<ICONS.List className="w-6 h-6 text-white" />} color="#7B1FA2" image={appImages.toLearn} />
-                  </div>
-                )}
+                {isVisible('videoClasses') && <div onClick={() => setActiveOverlay('videoClasses')}><ResourceCard title="Video Classes" malayalamTitle="വീഡിയോ ക്ലാസുകൾ" description="Interactive video lessons." icon={<ICONS.Play className="w-6 h-6 text-white" />} color="#2D235C" image={appImages.videoClasses} /></div>}
+                {isVisible('quran') && <div onClick={() => setActiveOverlay('quran')}><ResourceCard title="Holy Quran" malayalamTitle="വിശുദ്ധ ഖുർആൻ" description="Read and listen." icon={<ICONS.Quran className="w-6 h-6 text-white" />} color="#FFC107" image={appImages.quran} /></div>}
+                {isVisible('bookGuide') && <div onClick={() => setActiveOverlay('bookGuide')}><ResourceCard title="Book Guide" malayalamTitle="പുസ്തക സഹായി" description="Full textbook guides." icon={<ICONS.Book className="w-6 h-6 text-white" />} color="#1976D2" image={appImages.bookGuide} /></div>}
+                {isVisible('translatedGuide') && <div onClick={() => setActiveOverlay('translatedGuide')}><ResourceCard title="Translated Guide" malayalamTitle="വിവർത്തനം" description="Study guides in Malayalam." icon={<ICONS.Translate className="w-6 h-6 text-white" />} color="#00796B" image={appImages.translatedGuide} /></div>}
+                {isVisible('dua') && <div onClick={() => setActiveOverlay('dua')}><ResourceCard title="Dua" malayalamTitle="ദുആകൾ" description="Important daily supplications." icon={<ICONS.Dua className="w-6 h-6 text-white" />} color="#D32F2F" image={appImages.dua} /></div>}
+                {isVisible('toLearn') && <div onClick={() => setActiveOverlay('toLearn')}><ResourceCard title="To Learn List" malayalamTitle="പഠന പട്ടിക" description="Plan your study schedule." icon={<ICONS.List className="w-6 h-6 text-white" />} color="#7B1FA2" image={appImages.toLearn} /></div>}
               </div>
             </section>
-
-            <section className="px-6">
-              <div className="mb-4">
-                <h2 className="text-xl font-bold text-[#2D235C]">Academic Hub</h2>
-                <p className="text-xs text-gray-500">സിലബസ് & ടൈംടേബിൾ</p>
-              </div>
-              <UtilityGrid selectedClass={selectedClass} />
-            </section>
-
-            <section className="px-6 pb-12">
-              <div className="mb-4">
-                <h2 className="text-xl font-bold text-[#2D235C]">Kids Zone</h2>
-                <p className="text-xs text-gray-500">കുട്ടികൾക്കായി</p>
-              </div>
-              <KidsZone onSelectSlate={() => setActiveOverlay('digitalSlate')} onSelectAbout={() => setActiveOverlay('about')} />
-            </section>
+            <section className="px-6"><h2 className="text-xl font-bold text-[#2D235C] mb-4">Academic Hub</h2><UtilityGrid selectedClass={selectedClass} onSelect={setActiveOverlay} /></section>
+            <section className="px-6 pb-12"><h2 className="text-xl font-bold text-[#2D235C] mb-4">Kids Zone</h2><KidsZone onSelectSlate={() => setActiveOverlay('digitalSlate')} onSelectAbout={() => setActiveOverlay('about')} onSelectSystem={setActiveOverlay} /></section>
           </div>
         );
       case Tab.Academic:
-        return <div className="px-6 py-8 space-y-6 pb-32"><h2 className="text-2xl font-bold text-[#2D235C]">Academic Center</h2><UtilityGrid selectedClass={selectedClass} /></div>;
+        return <div className="px-6 py-8 pb-32"><h2 className="text-2xl font-bold text-[#2D235C] mb-6">Academic Center</h2><UtilityGrid selectedClass={selectedClass} onSelect={setActiveOverlay} /></div>;
       case Tab.Kids:
-        return <div className="px-6 py-8 pb-32"><h2 className="text-2xl font-bold text-[#2D235C] mb-6">Kids Adventure</h2><KidsZone onSelectSlate={() => setActiveOverlay('digitalSlate')} onSelectAbout={() => setActiveOverlay('about')} /></div>;
+        return <div className="px-6 py-8 pb-32"><h2 className="text-2xl font-bold text-[#2D235C] mb-6">Kids Adventure</h2><KidsZone onSelectSlate={() => setActiveOverlay('digitalSlate')} onSelectAbout={() => setActiveOverlay('about')} onSelectSystem={setActiveOverlay} /></div>;
       case Tab.Profile:
         return (
           <div className="px-6 py-8 pb-32">
             <div className="glass-card p-8 rounded-[40px] text-center shadow-2xl">
-              <div onClick={handleAdminSecretTrigger} className="w-24 h-24 bg-[#2D235C] rounded-full mx-auto mb-4 flex items-center justify-center text-white text-3xl font-bold uppercase cursor-pointer select-none active:scale-95 transition-transform shadow-lg border-4 border-white">{userName.charAt(0)}</div>
+              <div onClick={() => setAdminTapCount(prev => prev + 1)} className="w-24 h-24 bg-[#2D235C] rounded-full mx-auto mb-4 flex items-center justify-center text-white text-3xl font-bold uppercase cursor-pointer select-none active:scale-95 shadow-lg border-4 border-white">{userName.charAt(0)}</div>
               <h3 className="text-xl font-bold text-[#2D235C]">{userName}</h3>
               <p className="text-gray-400 text-xs mt-1 font-medium">{today}</p>
               <button onClick={handleLogout} className="mt-8 w-full py-4 px-6 bg-red-50 text-red-600 font-bold rounded-2xl hover:bg-red-100 active:scale-95">Logout</button>
             </div>
           </div>
         );
-      default:
-        return null;
+      default: return null;
     }
+  };
+
+  const getSystemProps = (id: string) => {
+    const systems: Record<string, { title: string, malayalam: string, color: string }> = {
+      videoClasses: { title: "Video Classes", malayalam: "വീഡിയോ ക്ലാസുകൾ", color: "#2D235C" },
+      bookGuide: { title: "Book Guide", malayalam: "പുസ്തക സഹായി", color: "#1976D2" },
+      translatedGuide: { title: "Translated Guide", malayalam: "വിവർത്തനം", color: "#00796B" },
+      dua: { title: "Dua", malayalam: "പ്രാർത്ഥനകൾ", color: "#D32F2F" },
+      syl: { title: "Syllabus", malayalam: "സിലബസ്", color: "#3949AB" },
+      tim: { title: "Timetable", malayalam: "ടൈംടേബിൾ", color: "#8E24AA" },
+      mod: { title: "Model Papers", malayalam: "മോഡൽ പേപ്പേഴ്സ്", color: "#0288D1" },
+      alphabets: { title: "Alphabets", malayalam: "അക്ഷരങ്ങൾ", color: "#00897B" },
+      rhymes: { title: "Rhymes", malayalam: "പാട്ടുകൾ", color: "#F4511E" }
+    };
+    return systems[id] || { title: "System", malayalam: "സഹായി", color: "#2D235C" };
   };
 
   return (
@@ -288,9 +189,20 @@ const App: React.FC = () => {
       {activeOverlay === 'toLearn' && <div className="fixed inset-0 z-[200] bg-white animate-in slide-in-from-bottom duration-500"><ToLearnList onClose={() => setActiveOverlay(null)} /></div>}
       {activeOverlay === 'digitalSlate' && <div className="fixed inset-0 z-[200] bg-[#1a1a1a] animate-in slide-in-from-bottom duration-500"><DigitalSlate onClose={() => setActiveOverlay(null)} /></div>}
       {activeOverlay === 'about' && <div className="fixed inset-0 z-[200] bg-white animate-in slide-in-from-bottom duration-500"><About onClose={() => setActiveOverlay(null)} /></div>}
-      {activeOverlay === 'videoClasses' && <div className="fixed inset-0 z-[200] bg-white animate-in slide-in-from-bottom duration-500"><VideoClasses selectedClass={selectedClass} onClose={() => setActiveOverlay(null)} /></div>}
       {activeOverlay === 'quran' && <div className="fixed inset-0 z-[200] bg-white animate-in slide-in-from-bottom duration-500"><QuranSystem onClose={() => setActiveOverlay(null)} /></div>}
-      {activeOverlay === 'dua' && <div className="fixed inset-0 z-[200] bg-white animate-in slide-in-from-bottom duration-500"><DuaSystem selectedClass={selectedClass} classConfig={classConfig} onClose={() => setActiveOverlay(null)} /></div>}
+      
+      {/* Dynamic Resource Systems */}
+      {activeOverlay && !['toLearn', 'digitalSlate', 'about', 'quran'].includes(activeOverlay) && (
+        <div className="fixed inset-0 z-[200] bg-white animate-in slide-in-from-bottom duration-500">
+          <ResourceSystem 
+            systemId={activeOverlay} 
+            {...getSystemProps(activeOverlay)}
+            selectedClass={selectedClass} 
+            classConfig={classConfig} 
+            onClose={() => setActiveOverlay(null)} 
+          />
+        </div>
+      )}
     </div>
   );
 };
