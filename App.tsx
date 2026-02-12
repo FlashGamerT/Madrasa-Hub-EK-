@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Tab, ClassLevel } from './types';
 import { COLORS, ICONS } from './constants';
 import Header from './components/Header';
@@ -44,40 +44,52 @@ const App: React.FC = () => {
     toLearn: "https://images.unsplash.com/photo-1484480974693-6ca0a78fb36b?q=80&w=800&auto=format&fit=crop"
   });
 
+  const loadData = useCallback(async () => {
+    const storedName = localStorage.getItem('madrasa_hub_username');
+    const storedClass = localStorage.getItem('madrasa_hub_class');
+    if (storedName) { 
+      setUserName(storedName); 
+      setIsLoggedIn(true); 
+    }
+    if (storedClass) setSelectedClass(storedClass as ClassLevel);
+
+    try {
+      const [cloudBanners, cloudConfig, cloudImages] = await Promise.all([
+        getSetting('banners'),
+        getSetting('class_config'),
+        getSetting('app_images')
+      ]);
+      
+      if (cloudBanners) setBanners(cloudBanners);
+      
+      if (cloudConfig) {
+        setClassConfig(cloudConfig);
+        localStorage.setItem('madrasa_hub_class_config', JSON.stringify(cloudConfig));
+      } else {
+        // Fallback to local storage if network fails
+        const localConfig = localStorage.getItem('madrasa_hub_class_config');
+        if (localConfig) setClassConfig(JSON.parse(localConfig));
+      }
+
+      if (cloudImages) {
+        setAppImages(prev => ({ ...prev, ...cloudImages }));
+        localStorage.setItem('madrasa_hub_app_images', JSON.stringify(cloudImages));
+      }
+    } catch (e) { 
+      console.error("Data load error", e);
+      // Fallback logic
+      const localConfig = localStorage.getItem('madrasa_hub_class_config');
+      if (localConfig) setClassConfig(JSON.parse(localConfig));
+    }
+  }, []);
+
   useEffect(() => {
-    // 1. Splash Screen Timer
     const splashTimer = setTimeout(() => {
       setShowSplash(false);
     }, 3000);
 
-    // 2. Scroll Listener
     const handleScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener('scroll', handleScroll);
-
-    // 3. Load User Session and Cloud Config
-    const loadData = async () => {
-      const storedName = localStorage.getItem('madrasa_hub_username');
-      const storedClass = localStorage.getItem('madrasa_hub_class');
-      if (storedName) { 
-        setUserName(storedName); 
-        setIsLoggedIn(true); 
-      }
-      if (storedClass) setSelectedClass(storedClass as ClassLevel);
-
-      try {
-        const [cloudBanners, cloudConfig, cloudImages] = await Promise.all([
-          getSetting('banners'),
-          getSetting('class_config'),
-          getSetting('app_images')
-        ]);
-        if (cloudBanners) setBanners(cloudBanners);
-        if (cloudConfig) {
-          setClassConfig(cloudConfig);
-          localStorage.setItem('madrasa_hub_class_config', JSON.stringify(cloudConfig));
-        }
-        if (cloudImages) setAppImages(prev => ({ ...prev, ...cloudImages }));
-      } catch (e) { console.error("Data load error", e); }
-    };
 
     loadData();
 
@@ -85,21 +97,19 @@ const App: React.FC = () => {
       clearTimeout(splashTimer);
       window.removeEventListener('scroll', handleScroll);
     };
-  }, []);
+  }, [loadData]);
 
-  // Admin trigger effect - Strictly gesture based
+  // Admin trigger effect
   useEffect(() => {
     if (adminTapCount >= 10) {
       setIsAdmin(true);
       setAdminTapCount(0);
-      // We set the hash for consistency, but the state drives the view
-      window.location.hash = '#/admin';
     }
     
-    // Reset tap count if user stops tapping for 3 seconds
+    // Reset tap count if user stops tapping for 5 seconds
     const timer = setTimeout(() => {
       if (adminTapCount > 0) setAdminTapCount(0);
-    }, 3000);
+    }, 5000);
     
     return () => clearTimeout(timer);
   }, [adminTapCount]);
@@ -166,8 +176,8 @@ const App: React.FC = () => {
           <div className="px-6 py-8 pb-32">
             <div className="glass-card p-8 rounded-[40px] text-center shadow-2xl">
               <div 
-                onClick={() => setAdminTapCount(prev => prev + 1)} 
-                className="w-24 h-24 bg-[#2D235C] rounded-full mx-auto mb-4 flex items-center justify-center text-white text-3xl font-bold uppercase cursor-pointer select-none active:scale-95 shadow-lg border-4 border-white transition-all active:shadow-indigo-200"
+                onPointerDown={() => setAdminTapCount(prev => prev + 1)} 
+                className="w-24 h-24 bg-[#2D235C] rounded-full mx-auto mb-4 flex items-center justify-center text-white text-3xl font-bold uppercase cursor-pointer select-none active:scale-90 shadow-lg border-4 border-white transition-all"
               >
                 {userName.charAt(0)}
               </div>
@@ -197,16 +207,12 @@ const App: React.FC = () => {
     return { ...props, malayalamTitle: props.malayalamTitle };
   };
 
-  // Primary logic for Splash Screen
   if (showSplash) return <Splash />;
   
-  // Admin is a separate layer strictly triggered via 10 taps
-  if (isAdmin) return <AdminPanel onClose={() => { setIsAdmin(false); window.location.hash = ''; }} />;
+  if (isAdmin) return <AdminPanel onClose={() => { setIsAdmin(false); loadData(); }} onRefresh={loadData} />;
   
-  // Login screen is shown if user isn't authenticated
   if (!isLoggedIn) return <Login onLogin={handleLogin} />;
 
-  // Main App Content
   return (
     <div className="min-h-screen max-w-2xl mx-auto relative bg-[#FDF8F5]">
       <Header scrolled={scrolled} />

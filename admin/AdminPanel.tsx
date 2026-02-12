@@ -37,6 +37,11 @@ interface AppImages {
   toLearn: string;
 }
 
+interface AdminPanelProps {
+  onClose: () => void;
+  onRefresh?: () => void;
+}
+
 const ALL_CLASSES: ClassLevel[] = [
   'Class 1', 'Class 2', 'Class 3', 'Class 4', 'Class 5', 
   'Class 6', 'Class 7', 'Class 8', 'Class 9', 'Class 10', 
@@ -55,7 +60,7 @@ const APP_FEATURES = [
   { id: 'rhymes', label: 'Rhymes', malayalam: 'പാട്ടുകൾ' }
 ];
 
-const AdminPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefresh }) => {
   const [terminalId, setTerminalId] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [activeTab, setActiveTab] = useState<'users' | 'home' | 'customization'>('home');
@@ -111,7 +116,13 @@ const AdminPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         saveSetting('banners', banners),
         saveSetting('app_images', appImages)
       ]);
+      
+      // Update local storage so the change is instant even without a cloud fetch next time
+      localStorage.setItem('madrasa_hub_class_config', JSON.stringify(classConfigs));
+      localStorage.setItem('madrasa_hub_app_images', JSON.stringify(appImages));
+      
       alert('Changes synced successfully!');
+      if (onRefresh) onRefresh();
     } catch (err) { alert('Failed to sync. Check connection.'); }
     finally { setIsSaving(false); }
   };
@@ -131,26 +142,25 @@ const AdminPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const updateTargetList = (newList: FeatureItem[]) => {
     if (!selectedFeatureId) return;
     
+    const newConfigs = { ...classConfigs };
     if (adminPath.length === 0) {
-      const current = classConfigs[selectedClass] || { hiddenFeatures: [], features: {} };
+      const current = newConfigs[selectedClass] || { hiddenFeatures: [], features: {} };
       const currentFeature = current.features[selectedFeatureId] || { items: [] };
       const featureObj: FeatureConfig = Array.isArray(currentFeature) 
         ? { items: currentFeature } 
         : currentFeature;
 
-      setClassConfigs({
-        ...classConfigs,
-        [selectedClass]: {
-          ...current,
-          features: {
-            ...current.features,
-            [selectedFeatureId]: {
-              ...featureObj,
-              items: newList
-            }
+      newConfigs[selectedClass] = {
+        ...current,
+        features: {
+          ...current.features,
+          [selectedFeatureId]: {
+            ...featureObj,
+            items: newList
           }
         }
-      });
+      };
+      setClassConfigs(newConfigs);
       return;
     }
 
@@ -168,32 +178,32 @@ const AdminPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       });
     };
 
-    const feature = classConfigs[selectedClass]?.features?.[selectedFeatureId];
+    const currentClassConfig = newConfigs[selectedClass];
+    const feature = currentClassConfig.features[selectedFeatureId];
     const rootList = Array.isArray(feature) ? feature : (feature?.items || []);
     const updatedRoot = updateRecursive(rootList, adminPath);
     
-    const currentConfig = classConfigs[selectedClass];
-    const featureVal = currentConfig.features[selectedFeatureId];
+    const featureVal = currentClassConfig.features[selectedFeatureId];
     const featureObj: FeatureConfig = Array.isArray(featureVal) 
       ? { items: featureVal } 
       : featureVal;
 
-    setClassConfigs({
-      ...classConfigs,
-      [selectedClass]: {
-        ...currentConfig,
-        features: {
-          ...currentConfig.features,
-          [selectedFeatureId]: {
-            ...featureObj,
-            items: updatedRoot
-          }
+    newConfigs[selectedClass] = {
+      ...currentClassConfig,
+      features: {
+        ...currentClassConfig.features,
+        [selectedFeatureId]: {
+          ...featureObj,
+          items: updatedRoot
         }
       }
-    });
+    };
+
+    setClassConfigs(newConfigs);
 
     const newPath = [...adminPath];
-    newPath[newPath.length - 1] = { ...newPath[newPath.length - 1], children: newList };
+    const lastNodeIdx = newPath.length - 1;
+    newPath[lastNodeIdx] = { ...newPath[lastNodeIdx], children: newList };
     setAdminPath(newPath);
   };
 
