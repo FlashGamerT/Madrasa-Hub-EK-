@@ -114,10 +114,26 @@ const App: React.FC = () => {
     return () => clearTimeout(timer);
   }, [adminTapCount]);
 
-  const handleLogin = (name: string) => {
-    setUserName(name); 
+  const handleLogin = async (name: string) => {
+    const cleanName = name.trim();
+    setUserName(cleanName); 
     setIsLoggedIn(true);
-    localStorage.setItem('madrasa_hub_username', name);
+    localStorage.setItem('madrasa_hub_username', cleanName);
+
+    // Sync user to Supabase students table
+    try {
+      const { data: existingUser } = await supabase
+        .from('students')
+        .select('*')
+        .eq('name', cleanName)
+        .maybeSingle();
+
+      if (!existingUser) {
+        await supabase.from('students').insert([{ name: cleanName }]);
+      }
+    } catch (e) {
+      console.error("Cloud user sync failed during login", e);
+    }
   };
 
   const handleLogout = () => {

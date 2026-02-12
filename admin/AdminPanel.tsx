@@ -73,7 +73,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefresh }) => {
   const [adminPath, setAdminPath] = useState<FeatureItem[]>([]);
   
   const [users, setUsers] = useState<any[]>([]);
-  const [newUserName, setNewUserName] = useState('');
   const [classConfigs, setClassConfigs] = useState<Record<string, ClassConfig>>({});
   const [banners, setBanners] = useState<string[]>([]);
   const [appImages, setAppImages] = useState<AppImages>({
@@ -122,18 +121,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefresh }) => {
     e.preventDefault();
     if (terminalId === '198755') setIsAuthenticated(true);
     else alert('Invalid Terminal ID');
-  };
-
-  const enrollUser = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newUserName.trim()) return;
-    
-    const { error } = await supabase.from('students').insert([{ name: newUserName.trim() }]);
-    if (error) alert('Error enrolling user: ' + error.message);
-    else {
-      setNewUserName('');
-      loadUsers();
-    }
   };
 
   const deleteUser = async (id: string) => {
@@ -753,28 +740,6 @@ with check ( bucket_id = 'resources' );`;
 
         {activeTab === 'users' && (
           <div className="max-w-4xl mx-auto py-12 pb-32 space-y-8 animate-in fade-in duration-500">
-            <div className="bg-white p-8 rounded-[48px] shadow-xl border border-white/50">
-              <h3 className="text-xl font-black text-[#2D235C] mb-6 flex items-center gap-3">
-                <span className="p-3 bg-indigo-50 rounded-2xl text-indigo-500">👥</span>
-                Student Enrollment
-              </h3>
-              <form onSubmit={enrollUser} className="flex gap-4">
-                <input 
-                  type="text" 
-                  placeholder="Enter Student Full Name..." 
-                  value={newUserName}
-                  onChange={e => setNewUserName(e.target.value)}
-                  className="flex-1 h-16 px-6 bg-gray-50 border border-gray-100 rounded-[24px] focus:ring-2 focus:ring-[#2D235C22] transition-all font-medium"
-                />
-                <button 
-                  type="submit" 
-                  className="px-10 bg-[#2D235C] text-white rounded-[24px] font-black uppercase text-xs tracking-widest shadow-xl shadow-[#2D235C22] active:scale-95 transition-all"
-                >
-                  Enroll
-                </button>
-              </form>
-            </div>
-
             <div className="bg-white p-8 rounded-[48px] shadow-xl border border-white/50 min-h-[400px]">
               <div className="flex justify-between items-center mb-8">
                 <h3 className="text-lg font-black text-[#2D235C]">Enrolled Students ({users.length})</h3>
@@ -799,7 +764,7 @@ with check ( bucket_id = 'resources' );`;
                         </div>
                         <div className="overflow-hidden">
                           <p className="font-bold text-[#2D235C] truncate max-w-[120px]">{user.name}</p>
-                          <p className="text-[9px] text-gray-400 font-medium uppercase tracking-tighter">Enrolled {new Date(user.created_at).toLocaleDateString()}</p>
+                          <p className="text-[9px] text-gray-400 font-medium uppercase tracking-tighter">Joined {new Date(user.created_at).toLocaleDateString()}</p>
                         </div>
                       </div>
                       <button 
@@ -821,6 +786,7 @@ with check ( bucket_id = 'resources' );`;
                     <div className="col-span-full py-20 text-center flex flex-col items-center gap-4">
                       <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center text-2xl opacity-40">📭</div>
                       <p className="text-gray-400 font-bold">No students found in cloud database.</p>
+                      <p className="text-[10px] text-gray-300">New students appear here once they login for the first time.</p>
                     </div>
                   )}
                 </div>
