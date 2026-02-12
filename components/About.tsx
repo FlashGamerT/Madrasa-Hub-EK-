@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 interface AboutProps {
@@ -30,7 +31,7 @@ const About: React.FC<AboutProps> = ({ onClose }) => {
             />
           </div>
           <h1 className="text-2xl font-bold text-[#2D235C]">Madrasa Hub (EK)</h1>
-          <p className="text-gray-400 text-sm mt-1">Version 2.5.0 Gold Edition</p>
+          <p className="text-gray-400 text-sm mt-1">Version 1.0 Gold Edition</p>
         </div>
 
         <div className="space-y-6">
