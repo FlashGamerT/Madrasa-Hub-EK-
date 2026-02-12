@@ -47,6 +47,7 @@ const ResourceSystem: React.FC<ResourceSystemProps> = ({
   const [selectedItem, setSelectedItem] = useState<FeatureItem | null>(null);
   const [activeMedia, setActiveMedia] = useState<'pdf' | 'audio' | 'video' | 'image'>('pdf');
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isMediaLoading, setIsMediaLoading] = useState(true);
   const [audio] = useState(new Audio());
 
   useEffect(() => {
@@ -99,6 +100,7 @@ const ResourceSystem: React.FC<ResourceSystemProps> = ({
 
   const openMedia = (item: FeatureItem) => {
     setSelectedItem(item);
+    setIsMediaLoading(true);
     // Auto-select first available media
     if (item.pdf) setActiveMedia('pdf');
     else if (item.video) setActiveMedia('video');
@@ -108,7 +110,6 @@ const ResourceSystem: React.FC<ResourceSystemProps> = ({
 
   const goBack = () => {
     if (selectedItem) {
-      // If we auto-opened root, closing it should close the whole overlay
       if (selectedItem.id === 'root' && navigationStack.length === 0 && rootItems.length === 0) {
         onClose();
         return;
@@ -165,25 +166,73 @@ const ResourceSystem: React.FC<ResourceSystemProps> = ({
         </div>
 
         <div className="p-4 bg-gray-50 flex gap-2 overflow-x-auto no-scrollbar border-b border-gray-100">
-          {selectedItem.pdf && <button onClick={() => setActiveMedia('pdf')} className={`px-5 py-2.5 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all ${activeMedia === 'pdf' ? 'bg-[#2D235C] text-white shadow-md' : 'bg-white text-gray-400'}`}>PDF</button>}
-          {selectedItem.video && <button onClick={() => setActiveMedia('video')} className={`px-5 py-2.5 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all ${activeMedia === 'video' ? 'bg-[#2D235C] text-white shadow-md' : 'bg-white text-gray-400'}`}>Video</button>}
-          {selectedItem.image && <button onClick={() => setActiveMedia('image')} className={`px-5 py-2.5 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all ${activeMedia === 'image' ? 'bg-[#2D235C] text-white shadow-md' : 'bg-white text-gray-400'}`}>Image</button>}
+          {selectedItem.pdf && <button onClick={() => {setActiveMedia('pdf'); setIsMediaLoading(true);}} className={`px-5 py-2.5 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all ${activeMedia === 'pdf' ? 'bg-[#2D235C] text-white shadow-md' : 'bg-white text-gray-400'}`}>PDF</button>}
+          {selectedItem.video && <button onClick={() => {setActiveMedia('video'); setIsMediaLoading(true);}} className={`px-5 py-2.5 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all ${activeMedia === 'video' ? 'bg-[#2D235C] text-white shadow-md' : 'bg-white text-gray-400'}`}>Video</button>}
+          {selectedItem.image && <button onClick={() => {setActiveMedia('image'); setIsMediaLoading(true);}} className={`px-5 py-2.5 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all ${activeMedia === 'image' ? 'bg-[#2D235C] text-white shadow-md' : 'bg-white text-gray-400'}`}>Image</button>}
+          
+          {selectedItem.pdf && (
+            <a 
+              href={selectedItem.pdf} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="ml-auto px-5 py-2.5 bg-indigo-50 text-indigo-600 rounded-xl font-bold text-[10px] uppercase tracking-widest flex items-center gap-2"
+            >
+              Open PDF
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+            </a>
+          )}
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
-          <div className="bg-white rounded-[32px] shadow-xl overflow-hidden min-h-[60vh] flex flex-col">
-            {activeMedia === 'pdf' && selectedItem.pdf && (
-              <iframe src={`https://docs.google.com/viewer?url=${encodeURIComponent(selectedItem.pdf)}&embedded=true`} className="w-full flex-1 border-none min-h-[70vh]" />
-            )}
-            {activeMedia === 'video' && selectedItem.video && (
-              <div className="w-full aspect-video bg-black flex items-center justify-center">
-                <video src={selectedItem.video} controls className="w-full h-full" poster={selectedItem.image} />
+        <div className="flex-1 overflow-y-auto p-4 bg-gray-50 flex flex-col">
+          <div className="bg-white rounded-[32px] shadow-xl overflow-hidden flex-1 flex flex-col relative">
+            {isMediaLoading && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-white z-10">
+                <div className="w-10 h-10 border-4 border-gray-100 border-t-indigo-500 rounded-full animate-spin mb-4" />
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Loading Media...</p>
               </div>
             )}
-            {activeMedia === 'image' && selectedItem.image && (
-              <img src={selectedItem.image} className="w-full h-auto object-contain p-4" alt="Resource" />
+
+            {activeMedia === 'pdf' && selectedItem.pdf && (
+              <object 
+                data={selectedItem.pdf} 
+                type="application/pdf" 
+                className="w-full h-full min-h-[70vh] flex-1"
+                onLoad={() => setIsMediaLoading(false)}
+              >
+                <div className="p-10 text-center flex flex-col items-center justify-center h-full gap-4">
+                  <div className="w-16 h-16 bg-red-50 text-red-400 rounded-2xl flex items-center justify-center text-3xl">📄</div>
+                  <p className="text-gray-500 font-bold">Unable to preview PDF directly.</p>
+                  <a href={selectedItem.pdf} target="_blank" rel="noopener noreferrer" className="px-8 py-3 bg-[#2D235C] text-white rounded-xl font-bold text-sm">Download PDF to View</a>
+                </div>
+              </object>
             )}
-            {(!selectedItem[activeMedia]) && <div className="p-20 text-center text-gray-300 font-bold">Content Loading...</div>}
+
+            {activeMedia === 'video' && selectedItem.video && (
+              <div className="w-full h-full bg-black flex items-center justify-center">
+                <video 
+                  src={selectedItem.video} 
+                  controls 
+                  className="w-full h-full" 
+                  poster={selectedItem.image}
+                  onLoadedData={() => setIsMediaLoading(false)}
+                />
+              </div>
+            )}
+
+            {activeMedia === 'image' && selectedItem.image && (
+              <div className="w-full h-full flex items-center justify-center overflow-auto p-4">
+                <img 
+                  src={selectedItem.image} 
+                  className="max-w-full h-auto object-contain rounded-xl" 
+                  alt="Resource" 
+                  onLoad={() => setIsMediaLoading(false)}
+                />
+              </div>
+            )}
+            
+            {(!selectedItem[activeMedia]) && !isMediaLoading && (
+              <div className="p-20 text-center text-gray-300 font-bold">No {activeMedia} content available.</div>
+            )}
           </div>
         </div>
       </div>
@@ -211,7 +260,6 @@ const ResourceSystem: React.FC<ResourceSystemProps> = ({
 
       <div className="flex-1 overflow-y-auto p-6 pb-32">
         <div className="grid grid-cols-1 gap-4">
-          {/* Case 1: Root Media on the main feature itself (e.g., Syllabus) */}
           {navigationStack.length === 0 && rootMedia && hasMedia(rootMedia) && (
              <button
               onClick={() => openMedia({ id: 'root', label: title, ...rootMedia })}
@@ -230,7 +278,6 @@ const ResourceSystem: React.FC<ResourceSystemProps> = ({
             </button>
           )}
 
-          {/* Case 2: Root Media of a sub-folder (parent item) */}
           {currentParent && hasMedia(currentParent) && (
             <button
               onClick={() => openMedia(currentParent)}
