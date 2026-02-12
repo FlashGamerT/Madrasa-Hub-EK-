@@ -16,6 +16,7 @@ import DigitalSlate from './components/DigitalSlate';
 import About from './components/About';
 import ResourceSystem from './components/systems/ResourceSystem';
 import QuranSystem from './components/systems/QuranSystem';
+import TranslatorSystem from './components/systems/TranslatorSystem';
 import BannerSlider from './components/BannerSlider';
 import { supabase, getSetting } from './lib/supabase';
 
@@ -66,7 +67,6 @@ const App: React.FC = () => {
         setClassConfig(cloudConfig);
         localStorage.setItem('madrasa_hub_class_config', JSON.stringify(cloudConfig));
       } else {
-        // Fallback to local storage if network fails
         const localConfig = localStorage.getItem('madrasa_hub_class_config');
         if (localConfig) setClassConfig(JSON.parse(localConfig));
       }
@@ -77,7 +77,6 @@ const App: React.FC = () => {
       }
     } catch (e) { 
       console.error("Data load error", e);
-      // Fallback logic
       const localConfig = localStorage.getItem('madrasa_hub_class_config');
       if (localConfig) setClassConfig(JSON.parse(localConfig));
     }
@@ -99,14 +98,12 @@ const App: React.FC = () => {
     };
   }, [loadData]);
 
-  // Admin trigger effect
   useEffect(() => {
     if (adminTapCount >= 10) {
       setIsAdmin(true);
       setAdminTapCount(0);
     }
     
-    // Reset tap count if user stops tapping for 5 seconds
     const timer = setTimeout(() => {
       if (adminTapCount > 0) setAdminTapCount(0);
     }, 5000);
@@ -120,7 +117,6 @@ const App: React.FC = () => {
     setIsLoggedIn(true);
     localStorage.setItem('madrasa_hub_username', cleanName);
 
-    // Sync user to Supabase students table
     try {
       const { data: existingUser } = await supabase
         .from('students')
@@ -184,7 +180,16 @@ const App: React.FC = () => {
           </div>
         );
       case Tab.Academic:
-        return <div className="px-6 py-8 pb-32"><h2 className="text-2xl font-bold text-[#2D235C] mb-6">Academic Center</h2><UtilityGrid selectedClass={selectedClass} onSelect={setActiveOverlay} /></div>;
+        return (
+          <div className="px-6 py-8 pb-32 animate-in fade-in duration-500">
+            <h2 className="text-2xl font-bold text-[#2D235C] mb-6">Academic Center</h2>
+            <UtilityGrid 
+              selectedClass={selectedClass} 
+              onSelect={setActiveOverlay} 
+              variant="large" 
+            />
+          </div>
+        );
       case Tab.Kids:
         return <div className="px-6 py-8 pb-32"><h2 className="text-2xl font-bold text-[#2D235C] mb-6">Kids Adventure</h2><KidsZone onSelectSlate={() => setActiveOverlay('digitalSlate')} onSelectAbout={() => setActiveOverlay('about')} onSelectSystem={setActiveOverlay} /></div>;
       case Tab.Profile:
@@ -238,8 +243,9 @@ const App: React.FC = () => {
       {activeOverlay === 'digitalSlate' && <div className="fixed inset-0 z-[200] bg-[#1a1a1a] animate-in slide-in-from-bottom duration-500"><DigitalSlate onClose={() => setActiveOverlay(null)} /></div>}
       {activeOverlay === 'about' && <div className="fixed inset-0 z-[200] bg-white animate-in slide-in-from-bottom duration-500"><About onClose={() => setActiveOverlay(null)} /></div>}
       {activeOverlay === 'quran' && <div className="fixed inset-0 z-[200] bg-white animate-in slide-in-from-bottom duration-500"><QuranSystem onClose={() => setActiveOverlay(null)} /></div>}
+      {activeOverlay === 'translator' && <div className="fixed inset-0 z-[200] bg-white animate-in slide-in-from-bottom duration-500"><TranslatorSystem onClose={() => setActiveOverlay(null)} /></div>}
       
-      {activeOverlay && !['toLearn', 'digitalSlate', 'about', 'quran'].includes(activeOverlay) && (
+      {activeOverlay && !['toLearn', 'digitalSlate', 'about', 'quran', 'translator'].includes(activeOverlay) && (
         <div className="fixed inset-0 z-[200] bg-white animate-in slide-in-from-bottom duration-500">
           <ResourceSystem 
             systemId={activeOverlay} 
