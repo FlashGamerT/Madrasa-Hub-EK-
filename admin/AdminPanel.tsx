@@ -72,7 +72,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefresh }) => {
   
   const [adminPath, setAdminPath] = useState<FeatureItem[]>([]);
   
-  const [users, setUsers] = useState<string[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
+  const [newUserName, setNewUserName] = useState('');
   const [classConfigs, setClassConfigs] = useState<Record<string, ClassConfig>>({});
   const [banners, setBanners] = useState<string[]>([]);
   const [appImages, setAppImages] = useState<AppImages>({
@@ -84,21 +85,36 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefresh }) => {
     toLearn: ""
   });
   const [isSaving, setIsSaving] = useState(false);
+  const [isUsersLoading, setIsUsersLoading] = useState(false);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [newBannerUrl, setNewBannerUrl] = useState('');
 
+  const loadAllData = async () => {
+    const [cloudConfig, cloudBanners, cloudImages] = await Promise.all([
+      getSetting('class_config'),
+      getSetting('banners'),
+      getSetting('app_images')
+    ]);
+    if (cloudConfig) setClassConfigs(cloudConfig);
+    if (cloudBanners) setBanners(cloudBanners);
+    if (cloudImages) setAppImages(cloudImages);
+    loadUsers();
+  };
+
+  const loadUsers = async () => {
+    setIsUsersLoading(true);
+    try {
+      const { data, error } = await supabase.from('students').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      if (data) setUsers(data);
+    } catch (err: any) {
+      console.error("Error loading users:", err.message);
+    } finally {
+      setIsUsersLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const loadAllData = async () => {
-      const [cloudUsers, cloudConfig, cloudBanners, cloudImages] = await Promise.all([
-        supabase.from('students').select('name'),
-        getSetting('class_config'),
-        getSetting('banners'),
-        getSetting('app_images')
-      ]);
-      if (cloudUsers.data) setUsers(cloudUsers.data.map((u: any) => u.name));
-      if (cloudConfig) setClassConfigs(cloudConfig);
-      if (cloudBanners) setBanners(cloudBanners);
-      if (cloudImages) setAppImages(cloudImages);
-    };
     loadAllData();
   }, []);
 
@@ -106,6 +122,37 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefresh }) => {
     e.preventDefault();
     if (terminalId === '198755') setIsAuthenticated(true);
     else alert('Invalid Terminal ID');
+  };
+
+  const enrollUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newUserName.trim()) return;
+    
+    const { error } = await supabase.from('students').insert([{ name: newUserName.trim() }]);
+    if (error) alert('Error enrolling user: ' + error.message);
+    else {
+      setNewUserName('');
+      loadUsers();
+    }
+  };
+
+  const deleteUser = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this student? This cannot be undone.')) return;
+    
+    setDeletingUserId(id);
+    try {
+      const { error } = await supabase.from('students').delete().eq('id', id);
+      if (error) {
+        throw error;
+      }
+      // Success
+      setUsers(prev => prev.filter(u => u.id !== id));
+    } catch (err: any) {
+      console.error("Delete failed:", err);
+      alert(`Delete Failed: ${err.message}\n\nHint: Make sure you have run the "Allow public delete" SQL policy in Supabase.`);
+    } finally {
+      setDeletingUserId(null);
+    }
   };
 
   const saveAllToStorage = async () => {
@@ -117,7 +164,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onRefresh }) => {
         saveSetting('app_images', appImages)
       ]);
       
-      // Update local storage so the change is instant even without a cloud fetch next time
       localStorage.setItem('madrasa_hub_class_config', JSON.stringify(classConfigs));
       localStorage.setItem('madrasa_hub_app_images', JSON.stringify(appImages));
       
@@ -706,11 +752,79 @@ with check ( bucket_id = 'resources' );`;
         )}
 
         {activeTab === 'users' && (
-          <div className="max-w-2xl mx-auto py-20 bg-white rounded-[48px] shadow-xl border border-white/50 text-center flex flex-col items-center gap-6">
-            <div className="w-24 h-24 bg-gray-50 rounded-full flex items-center justify-center text-4xl">👥</div>
-            <div>
-              <h3 className="text-xl font-bold text-[#2D235C]">User Management Coming Soon</h3>
-              <p className="text-gray-400 mt-2">We are currently integrating cloud student databases.</p>
+          <div className="max-w-4xl mx-auto py-12 pb-32 space-y-8 animate-in fade-in duration-500">
+            <div className="bg-white p-8 rounded-[48px] shadow-xl border border-white/50">
+              <h3 className="text-xl font-black text-[#2D235C] mb-6 flex items-center gap-3">
+                <span className="p-3 bg-indigo-50 rounded-2xl text-indigo-500">👥</span>
+                Student Enrollment
+              </h3>
+              <form onSubmit={enrollUser} className="flex gap-4">
+                <input 
+                  type="text" 
+                  placeholder="Enter Student Full Name..." 
+                  value={newUserName}
+                  onChange={e => setNewUserName(e.target.value)}
+                  className="flex-1 h-16 px-6 bg-gray-50 border border-gray-100 rounded-[24px] focus:ring-2 focus:ring-[#2D235C22] transition-all font-medium"
+                />
+                <button 
+                  type="submit" 
+                  className="px-10 bg-[#2D235C] text-white rounded-[24px] font-black uppercase text-xs tracking-widest shadow-xl shadow-[#2D235C22] active:scale-95 transition-all"
+                >
+                  Enroll
+                </button>
+              </form>
+            </div>
+
+            <div className="bg-white p-8 rounded-[48px] shadow-xl border border-white/50 min-h-[400px]">
+              <div className="flex justify-between items-center mb-8">
+                <h3 className="text-lg font-black text-[#2D235C]">Enrolled Students ({users.length})</h3>
+                <button onClick={loadUsers} className="p-2 text-indigo-500 hover:bg-indigo-50 rounded-xl transition-all">
+                  <svg className={`w-5 h-5 ${isUsersLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </button>
+              </div>
+
+              {isUsersLoading && users.length === 0 ? (
+                <div className="flex justify-center py-20">
+                  <div className="w-10 h-10 border-4 border-indigo-100 border-t-indigo-500 rounded-full animate-spin" />
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                  {users.map((user) => (
+                    <div key={user.id} className="p-5 bg-gray-50 rounded-[32px] border border-white shadow-sm flex items-center justify-between group hover:shadow-md transition-all">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-[#2D235C] text-white rounded-full flex items-center justify-center font-bold text-sm shadow-md">
+                          {user.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="overflow-hidden">
+                          <p className="font-bold text-[#2D235C] truncate max-w-[120px]">{user.name}</p>
+                          <p className="text-[9px] text-gray-400 font-medium uppercase tracking-tighter">Enrolled {new Date(user.created_at).toLocaleDateString()}</p>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => deleteUser(user.id)}
+                        disabled={deletingUserId === user.id}
+                        className={`p-2.5 rounded-xl transition-all active:scale-90 ${deletingUserId === user.id ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-red-50 text-red-400 hover:bg-red-100 hover:text-red-600'}`}
+                      >
+                        {deletingUserId === user.id ? (
+                           <div className="w-4 h-4 border-2 border-gray-400/20 border-t-gray-400 rounded-full animate-spin" />
+                        ) : (
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
+                  ))}
+                  {users.length === 0 && !isUsersLoading && (
+                    <div className="col-span-full py-20 text-center flex flex-col items-center gap-4">
+                      <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center text-2xl opacity-40">📭</div>
+                      <p className="text-gray-400 font-bold">No students found in cloud database.</p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}
