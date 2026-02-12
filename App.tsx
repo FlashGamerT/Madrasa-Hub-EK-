@@ -45,28 +45,23 @@ const App: React.FC = () => {
   });
 
   useEffect(() => {
+    // 1. Splash Screen Timer
     const splashTimer = setTimeout(() => {
       setShowSplash(false);
     }, 3000);
 
-    const handleRouting = () => {
-      const path = window.location.pathname;
-      const hash = window.location.hash;
-      if (path === '/admin' || hash === '#/admin') setIsAdmin(true);
-      else setIsAdmin(false);
-    };
-
-    handleRouting();
-    window.addEventListener('hashchange', handleRouting);
-    window.addEventListener('popstate', handleRouting);
-
+    // 2. Scroll Listener
     const handleScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener('scroll', handleScroll);
 
+    // 3. Load User Session and Cloud Config
     const loadData = async () => {
       const storedName = localStorage.getItem('madrasa_hub_username');
       const storedClass = localStorage.getItem('madrasa_hub_class');
-      if (storedName) { setUserName(storedName); setIsLoggedIn(true); }
+      if (storedName) { 
+        setUserName(storedName); 
+        setIsLoggedIn(true); 
+      }
       if (storedClass) setSelectedClass(storedClass as ClassLevel);
 
       try {
@@ -85,20 +80,39 @@ const App: React.FC = () => {
     };
 
     loadData();
+
     return () => {
       clearTimeout(splashTimer);
       window.removeEventListener('scroll', handleScroll);
-      window.removeEventListener('hashchange', handleRouting);
     };
   }, []);
 
+  // Admin trigger effect - Strictly gesture based
+  useEffect(() => {
+    if (adminTapCount >= 10) {
+      setIsAdmin(true);
+      setAdminTapCount(0);
+      // We set the hash for consistency, but the state drives the view
+      window.location.hash = '#/admin';
+    }
+    
+    // Reset tap count if user stops tapping for 3 seconds
+    const timer = setTimeout(() => {
+      if (adminTapCount > 0) setAdminTapCount(0);
+    }, 3000);
+    
+    return () => clearTimeout(timer);
+  }, [adminTapCount]);
+
   const handleLogin = (name: string) => {
-    setUserName(name); setIsLoggedIn(true);
+    setUserName(name); 
+    setIsLoggedIn(true);
     localStorage.setItem('madrasa_hub_username', name);
   };
 
   const handleLogout = () => {
-    setIsLoggedIn(false); setUserName('');
+    setIsLoggedIn(false); 
+    setUserName('');
     localStorage.removeItem('madrasa_hub_username');
     setActiveTab(Tab.Home);
   };
@@ -107,10 +121,6 @@ const App: React.FC = () => {
     setSelectedClass(level);
     localStorage.setItem('madrasa_hub_class', level);
   };
-
-  if (showSplash) return <Splash />;
-  if (isAdmin) return <AdminPanel onClose={() => { setIsAdmin(false); window.location.hash = ''; }} />;
-  if (!isLoggedIn) return <Login onLogin={handleLogin} />;
 
   const isVisible = (id: string) => {
     const hardHiddenRules: Record<string, string[]> = {
@@ -155,7 +165,12 @@ const App: React.FC = () => {
         return (
           <div className="px-6 py-8 pb-32">
             <div className="glass-card p-8 rounded-[40px] text-center shadow-2xl">
-              <div onClick={() => setAdminTapCount(prev => prev + 1)} className="w-24 h-24 bg-[#2D235C] rounded-full mx-auto mb-4 flex items-center justify-center text-white text-3xl font-bold uppercase cursor-pointer select-none active:scale-95 shadow-lg border-4 border-white">{userName.charAt(0)}</div>
+              <div 
+                onClick={() => setAdminTapCount(prev => prev + 1)} 
+                className="w-24 h-24 bg-[#2D235C] rounded-full mx-auto mb-4 flex items-center justify-center text-white text-3xl font-bold uppercase cursor-pointer select-none active:scale-95 shadow-lg border-4 border-white transition-all active:shadow-indigo-200"
+              >
+                {userName.charAt(0)}
+              </div>
               <h3 className="text-xl font-bold text-[#2D235C]">{userName}</h3>
               <p className="text-gray-400 text-xs mt-1 font-medium">{today}</p>
               <button onClick={handleLogout} className="mt-8 w-full py-4 px-6 bg-red-50 text-red-600 font-bold rounded-2xl hover:bg-red-100 active:scale-95">Logout</button>
@@ -178,9 +193,20 @@ const App: React.FC = () => {
       alphabets: { title: "Alphabets", malayalamTitle: "അക്ഷരങ്ങൾ", color: "#00897B" },
       rhymes: { title: "Rhymes", malayalamTitle: "പാട്ടുകൾ", color: "#F4511E" }
     };
-    return systems[id] || { title: "System", malayalamTitle: "സഹായി", color: "#2D235C" };
+    const props = systems[id] || { title: "System", malayalamTitle: "സഹായി", color: "#2D235C" };
+    return { ...props, malayalamTitle: props.malayalamTitle };
   };
 
+  // Primary logic for Splash Screen
+  if (showSplash) return <Splash />;
+  
+  // Admin is a separate layer strictly triggered via 10 taps
+  if (isAdmin) return <AdminPanel onClose={() => { setIsAdmin(false); window.location.hash = ''; }} />;
+  
+  // Login screen is shown if user isn't authenticated
+  if (!isLoggedIn) return <Login onLogin={handleLogin} />;
+
+  // Main App Content
   return (
     <div className="min-h-screen max-w-2xl mx-auto relative bg-[#FDF8F5]">
       <Header scrolled={scrolled} />
@@ -191,7 +217,6 @@ const App: React.FC = () => {
       {activeOverlay === 'about' && <div className="fixed inset-0 z-[200] bg-white animate-in slide-in-from-bottom duration-500"><About onClose={() => setActiveOverlay(null)} /></div>}
       {activeOverlay === 'quran' && <div className="fixed inset-0 z-[200] bg-white animate-in slide-in-from-bottom duration-500"><QuranSystem onClose={() => setActiveOverlay(null)} /></div>}
       
-      {/* Dynamic Resource Systems */}
       {activeOverlay && !['toLearn', 'digitalSlate', 'about', 'quran'].includes(activeOverlay) && (
         <div className="fixed inset-0 z-[200] bg-white animate-in slide-in-from-bottom duration-500">
           <ResourceSystem 

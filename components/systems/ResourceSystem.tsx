@@ -12,6 +12,16 @@ interface FeatureItem {
   children?: FeatureItem[];
 }
 
+interface FeatureConfig {
+  rootMedia?: {
+    pdf?: string;
+    audio?: string;
+    video?: string;
+    image?: string;
+  };
+  items: FeatureItem[];
+}
+
 interface ResourceSystemProps {
   systemId: string;
   title: string;
@@ -32,6 +42,7 @@ const ResourceSystem: React.FC<ResourceSystemProps> = ({
   accentColor = "#2D235C"
 }) => {
   const [rootItems, setRootItems] = useState<FeatureItem[]>([]);
+  const [rootMedia, setRootMedia] = useState<any>(null);
   const [navigationStack, setNavigationStack] = useState<FeatureItem[]>([]);
   const [selectedItem, setSelectedItem] = useState<FeatureItem | null>(null);
   const [activeMedia, setActiveMedia] = useState<'pdf' | 'audio' | 'video' | 'image'>('pdf');
@@ -40,10 +51,31 @@ const ResourceSystem: React.FC<ResourceSystemProps> = ({
 
   useEffect(() => {
     if (classConfig && classConfig[selectedClass]) {
-      const feats = classConfig[selectedClass]?.features?.[systemId] || [];
-      setRootItems(feats);
+      const featData = classConfig[selectedClass]?.features?.[systemId];
+      
+      let items: FeatureItem[] = [];
+      let media: any = null;
+
+      if (Array.isArray(featData)) {
+        items = featData;
+      } else if (featData) {
+        items = featData.items || [];
+        media = featData.rootMedia || null;
+      }
+
+      setRootItems(items);
+      setRootMedia(media);
+
+      // Auto-open logic: If there's root media and NO items, jump straight to the media viewer
+      if (media && items.length === 0 && (media.pdf || media.video || media.audio || media.image)) {
+        openMedia({ 
+          id: 'root', 
+          label: title, 
+          ...media 
+        });
+      }
     }
-  }, [selectedClass, classConfig, systemId]);
+  }, [selectedClass, classConfig, systemId, title]);
 
   const toggleAudio = (url: string) => {
     if (isPlaying) {
@@ -61,17 +93,26 @@ const ResourceSystem: React.FC<ResourceSystemProps> = ({
     if (item.children && item.children.length > 0) {
       setNavigationStack([...navigationStack, item]);
     } else {
-      setSelectedItem(item);
-      // Auto-select first available media
-      if (item.pdf) setActiveMedia('pdf');
-      else if (item.video) setActiveMedia('video');
-      else if (item.image) setActiveMedia('image');
-      else if (item.audio) setActiveMedia('audio');
+      openMedia(item);
     }
   };
 
+  const openMedia = (item: FeatureItem) => {
+    setSelectedItem(item);
+    // Auto-select first available media
+    if (item.pdf) setActiveMedia('pdf');
+    else if (item.video) setActiveMedia('video');
+    else if (item.image) setActiveMedia('image');
+    else if (item.audio) setActiveMedia('audio');
+  }
+
   const goBack = () => {
     if (selectedItem) {
+      // If we auto-opened root, closing it should close the whole overlay
+      if (selectedItem.id === 'root' && navigationStack.length === 0 && rootItems.length === 0) {
+        onClose();
+        return;
+      }
       setSelectedItem(null);
       audio.pause();
       setIsPlaying(false);
@@ -88,11 +129,17 @@ const ResourceSystem: React.FC<ResourceSystemProps> = ({
     ? navigationStack[navigationStack.length - 1].children || [] 
     : rootItems;
 
+  const currentParent = navigationStack.length > 0 
+    ? navigationStack[navigationStack.length - 1] 
+    : null;
+
   const currentTitle = selectedItem 
     ? selectedItem.label 
     : navigationStack.length > 0 
       ? navigationStack[navigationStack.length - 1].label 
       : title;
+
+  const hasMedia = (item: any) => !!(item.pdf || item.video || item.audio || item.image);
 
   if (selectedItem) {
     return (
@@ -164,6 +211,44 @@ const ResourceSystem: React.FC<ResourceSystemProps> = ({
 
       <div className="flex-1 overflow-y-auto p-6 pb-32">
         <div className="grid grid-cols-1 gap-4">
+          {/* Case 1: Root Media on the main feature itself (e.g., Syllabus) */}
+          {navigationStack.length === 0 && rootMedia && hasMedia(rootMedia) && (
+             <button
+              onClick={() => openMedia({ id: 'root', label: title, ...rootMedia })}
+              className="group flex items-center gap-5 p-6 bg-indigo-50 rounded-[32px] shadow-sm border border-indigo-100 text-left transition-all hover:translate-y-[-4px] active:scale-95"
+            >
+              <div className="w-14 h-14 rounded-2xl bg-indigo-500 flex items-center justify-center text-white shadow-md">
+                 <svg className="w-7 h-7" fill="currentColor" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3" /></svg>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-black text-indigo-900 leading-tight">View Main Resource</h3>
+                <p className="text-[10px] text-indigo-600 font-bold uppercase tracking-widest mt-0.5">Primary file for this category</p>
+              </div>
+              <div className="text-indigo-200 group-hover:text-indigo-500 transition-colors">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M9 5l7 7-7 7" /></svg>
+              </div>
+            </button>
+          )}
+
+          {/* Case 2: Root Media of a sub-folder (parent item) */}
+          {currentParent && hasMedia(currentParent) && (
+            <button
+              onClick={() => openMedia(currentParent)}
+              className="group flex items-center gap-5 p-6 bg-amber-50 rounded-[32px] shadow-sm border border-amber-100 text-left transition-all hover:translate-y-[-4px] active:scale-95"
+            >
+              <div className="w-14 h-14 rounded-2xl bg-amber-400 flex items-center justify-center text-[#2D235C] shadow-md">
+                 <svg className="w-7 h-7" fill="currentColor" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3" /></svg>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-black text-amber-900 leading-tight">View Lesson Content</h3>
+                <p className="text-[10px] text-amber-700 font-bold uppercase tracking-widest mt-0.5">Primary resources for {currentParent.label}</p>
+              </div>
+              <div className="text-amber-300 group-hover:text-amber-600 transition-colors">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M9 5l7 7-7 7" /></svg>
+              </div>
+            </button>
+          )}
+
           {currentItems.map((item) => (
             <button
               key={item.id}
@@ -189,6 +274,9 @@ const ResourceSystem: React.FC<ResourceSystemProps> = ({
                       {item.audio && <span className="text-[8px] bg-green-50 text-green-500 font-black px-1.5 py-0.5 rounded uppercase">Audio</span>}
                     </>
                   )}
+                  {item.children && item.children.length > 0 && hasMedia(item) && (
+                    <span className="text-[8px] bg-amber-50 text-amber-600 font-black px-1.5 py-0.5 rounded uppercase">+ Resources</span>
+                  )}
                 </div>
               </div>
               <div className="text-gray-200 group-hover:text-amber-400 transition-colors">
@@ -196,7 +284,7 @@ const ResourceSystem: React.FC<ResourceSystemProps> = ({
               </div>
             </button>
           ))}
-          {currentItems.length === 0 && (
+          {currentItems.length === 0 && !currentParent && !rootMedia && (
             <div className="py-20 text-center text-gray-300">
                <p className="font-bold">No items found</p>
                <p className="text-xs">Add content in the Admin Panel to see them here.</p>
