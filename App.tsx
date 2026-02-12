@@ -167,18 +167,18 @@ const App: React.FC = () => {
   };
 
   const getSystemProps = (id: string) => {
-    const systems: Record<string, { title: string, malayalam: string, color: string }> = {
-      videoClasses: { title: "Video Classes", malayalam: "വീഡിയോ ക്ലാസുകൾ", color: "#2D235C" },
-      bookGuide: { title: "Book Guide", malayalam: "പുസ്തക സഹായി", color: "#1976D2" },
-      translatedGuide: { title: "Translated Guide", malayalam: "വിവർത്തനം", color: "#00796B" },
-      dua: { title: "Dua", malayalam: "പ്രാർത്ഥനകൾ", color: "#D32F2F" },
-      syl: { title: "Syllabus", malayalam: "സിലബസ്", color: "#3949AB" },
-      tim: { title: "Timetable", malayalam: "ടൈംടേബിൾ", color: "#8E24AA" },
-      mod: { title: "Model Papers", malayalam: "മോഡൽ പേപ്പേഴ്സ്", color: "#0288D1" },
-      alphabets: { title: "Alphabets", malayalam: "അക്ഷരങ്ങൾ", color: "#00897B" },
-      rhymes: { title: "Rhymes", malayalam: "പാട്ടുകൾ", color: "#F4511E" }
+    const systems: Record<string, { title: string, malayalamTitle: string, color: string }> = {
+      videoClasses: { title: "Video Classes", malayalamTitle: "വീഡിയോ ക്ലാസുകൾ", color: "#2D235C" },
+      bookGuide: { title: "Book Guide", malayalamTitle: "പുസ്തക സഹായി", color: "#1976D2" },
+      translatedGuide: { title: "Translated Guide", malayalamTitle: "വിവർത്തനം", color: "#00796B" },
+      dua: { title: "Dua", malayalamTitle: "പ്രാർത്ഥനകൾ", color: "#D32F2F" },
+      syl: { title: "Syllabus", malayalamTitle: "സിലബസ്", color: "#3949AB" },
+      tim: { title: "Timetable", malayalamTitle: "ടൈംടേബിൾ", color: "#8E24AA" },
+      mod: { title: "Model Papers", malayalamTitle: "മോഡൽ പേപ്പേഴ്സ്", color: "#0288D1" },
+      alphabets: { title: "Alphabets", malayalamTitle: "അക്ഷരങ്ങൾ", color: "#00897B" },
+      rhymes: { title: "Rhymes", malayalamTitle: "പാട്ടുകൾ", color: "#F4511E" }
     };
-    return systems[id] || { title: "System", malayalam: "സഹായി", color: "#2D235C" };
+    return systems[id] || { title: "System", malayalamTitle: "സഹായി", color: "#2D235C" };
   };
 
   return (
