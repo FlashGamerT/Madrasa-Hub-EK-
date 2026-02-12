@@ -67,7 +67,6 @@ const ResourceSystem: React.FC<ResourceSystemProps> = ({
       setRootItems(items);
       setRootMedia(media);
 
-      // Auto-open logic: If there's root media and NO items, jump straight to the media viewer
       if (media && items.length === 0 && (media.pdf || media.video || media.audio || media.image)) {
         openMedia({ 
           id: 'root', 
@@ -101,7 +100,6 @@ const ResourceSystem: React.FC<ResourceSystemProps> = ({
   const openMedia = (item: FeatureItem) => {
     setSelectedItem(item);
     setIsMediaLoading(true);
-    // Auto-select first available media
     if (item.pdf) setActiveMedia('pdf');
     else if (item.video) setActiveMedia('video');
     else if (item.image) setActiveMedia('image');
@@ -133,12 +131,6 @@ const ResourceSystem: React.FC<ResourceSystemProps> = ({
   const currentParent = navigationStack.length > 0 
     ? navigationStack[navigationStack.length - 1] 
     : null;
-
-  const currentTitle = selectedItem 
-    ? selectedItem.label 
-    : navigationStack.length > 0 
-      ? navigationStack[navigationStack.length - 1].label 
-      : title;
 
   const hasMedia = (item: any) => !!(item.pdf || item.video || item.audio || item.image);
 
@@ -193,18 +185,12 @@ const ResourceSystem: React.FC<ResourceSystemProps> = ({
             )}
 
             {activeMedia === 'pdf' && selectedItem.pdf && (
-              <object 
-                data={selectedItem.pdf} 
-                type="application/pdf" 
-                className="w-full h-full min-h-[70vh] flex-1"
+              <iframe 
+                src={`https://docs.google.com/viewer?url=${encodeURIComponent(selectedItem.pdf)}&embedded=true`}
+                className="w-full h-full min-h-[70vh] flex-1 border-none"
                 onLoad={() => setIsMediaLoading(false)}
-              >
-                <div className="p-10 text-center flex flex-col items-center justify-center h-full gap-4">
-                  <div className="w-16 h-16 bg-red-50 text-red-400 rounded-2xl flex items-center justify-center text-3xl">📄</div>
-                  <p className="text-gray-500 font-bold">Unable to preview PDF directly.</p>
-                  <a href={selectedItem.pdf} target="_blank" rel="noopener noreferrer" className="px-8 py-3 bg-[#2D235C] text-white rounded-xl font-bold text-sm">Download PDF to View</a>
-                </div>
-              </object>
+                title="PDF Viewer"
+              />
             )}
 
             {activeMedia === 'video' && selectedItem.video && (
@@ -249,8 +235,8 @@ const ResourceSystem: React.FC<ResourceSystemProps> = ({
             </button>
           )}
           <div>
-            <h2 className="text-3xl font-bold tracking-tight">{navigationStack.length > 0 ? currentTitle : malayalamTitle}</h2>
-            <p className="text-white/70 text-xs uppercase tracking-[0.2em] font-black mt-1">{navigationStack.length > 0 ? title : title}</p>
+            <h2 className="text-3xl font-bold tracking-tight">{navigationStack.length > 0 ? navigationStack[navigationStack.length - 1].label : malayalamTitle}</h2>
+            <p className="text-white/70 text-xs uppercase tracking-[0.2em] font-black mt-1">{title}</p>
           </div>
         </div>
         <button onClick={onClose} className="p-3 bg-white/10 rounded-2xl hover:bg-white/20 active:scale-95 transition-all">
